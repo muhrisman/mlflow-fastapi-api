@@ -1,0 +1,38 @@
+from fastapi import FastAPI, Header, HTTPException, Depends
+import mlflow
+import json
+import os
+
+app = FastAPI()
+
+def require_api_key(x_api_key: str = Header(...)):
+    expected_key = os.environ.get("API_KEY")
+    if expected_key is None:
+        raise HTTPException(status_code=500, detail="API key not configured")
+    if x_api_key != expected_key:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+def get_latest_run_id():
+    client = mlflow.tracking.MlflowClient()
+    experiment = client.get_experiment_by_name("Default")
+
+    runs = client.search_runs(
+        experiment_ids=[experiment.experiment_id],
+        order_by=["attributes.start_time DESC"],
+        max_results=1
+    )
+
+    if not runs:
+        raise RuntimeError("No MLflow runs found")
+
+    return runs[0].info.run_id
+
+@app.get("/summary", dependencies=[Depends(require_api_key)])
+def summary():
+    run_id = get_latest_run_id()
+
+    client = mlflow.tracking.MlflowClient()
+    path = client.download_artifacts(run_id, "result.json")
+
+    with open(path) as f:
+        return json.load(f)
