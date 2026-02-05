@@ -3,11 +3,13 @@ import mlflow
 import json
 import os
 
+from analysis_logic import run_analysis
+
 app = FastAPI()
 
 
 # -------------------------
-# API key dependency
+# API key protection
 # -------------------------
 def require_api_key(x_api_key: str = Header(...)):
     expected_key = os.environ.get("API_KEY")
@@ -44,6 +46,15 @@ def get_latest_run_id():
 # -------------------------
 # API endpoints
 # -------------------------
+@app.post("/seed", dependencies=[Depends(require_api_key)])
+def seed():
+    result = run_analysis()
+    return {
+        "status": "seeded",
+        "result": result
+    }
+
+
 @app.get("/summary", dependencies=[Depends(require_api_key)])
 def summary():
     run_id = get_latest_run_id()
